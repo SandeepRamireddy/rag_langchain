@@ -1,0 +1,13 @@
+services:
+  superb:
+    build: .
+    container_name: superb-chatbot
+    ports:
+      - "8501:8501"
+    env_file:
+      - .env
+    volumes:
+      # Persist uploaded documents and FAISS index across container restarts
+      - ./rag_data:/app/rag_data
+      - ./faiss_store:/app/faiss_store
+    restart: unless-stopped
