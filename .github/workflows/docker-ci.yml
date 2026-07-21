@@ -1,0 +1,104 @@
+# ──────────────────────────────────────────────────────────────────────────────
+# SuperB CI/CD — Build & Run Docker Application
+# Triggers on any push or PR merge to the main branch
+# ──────────────────────────────────────────────────────────────────────────────
+
+name: SuperB Docker CI/CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  IMAGE_NAME: superb-chatbot
+  REGISTRY: ghcr.io
+
+jobs:
+  # ── Job 1: Build Docker image & push to GitHub Container Registry ────────
+  build-and-push:
+    name: 🐳 Build & Push Docker Image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🔧 Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: 🔑 Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 🏷️ Extract metadata (tags, labels)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository }}
+          tags: |
+            type=sha,prefix=
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: 🐳 Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ── Job 2: Run the application (smoke test) ─────────────────────────────
+  run-application:
+    name: 🚀 Run & Verify Application
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    if: github.event_name == 'push'
+
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🔧 Create .env file from secrets
+        run: |
+          echo "GOOGLE_API_KEY=${{ secrets.GOOGLE_API_KEY }}" >> .env
+          echo "GROQ_API_KEY=${{ secrets.GROQ_API_KEY }}" >> .env
+
+      - name: 🐳 Build and start container
+        run: |
+          docker compose up --build -d
+          echo "⏳ Waiting for SuperB to start..."
+          sleep 30
+
+      - name: ✅ Health check
+        run: |
+          echo "🔍 Checking if SuperB is running..."
+          for i in 1 2 3 4 5; do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8501/_stcore/health || true)
+            if [ "$STATUS" = "200" ]; then
+              echo "✅ SuperB is healthy! (HTTP $STATUS)"
+              exit 0
+            fi
+            echo "⏳ Attempt $i: Got HTTP $STATUS, retrying in 10s..."
+            sleep 10
+          done
+          echo "❌ SuperB failed to start"
+          docker compose logs
+          exit 1
+
+      - name: 📊 Show container logs
+        if: always()
+        run: docker compose logs --tail=50
+
+      - name: 🛑 Stop container
+        if: always()
+        run: docker compose down
