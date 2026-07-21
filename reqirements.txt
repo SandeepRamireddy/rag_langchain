@@ -23,3 +23,6 @@ langchain-text-splitters
 sentence_transformers
 faiss-cpu
 chromadb
+streamlit
+
+torchvision

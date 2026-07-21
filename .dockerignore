@@ -1,0 +1,36 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__
+*.py[cod]
+*.egg-info
+.venv
+build/
+dist/
+wheels/
+
+# Environment
+.env
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# Notebooks & non-essential dirs
+rag notebook/
+updated langchain/
+updated langgraph/
+.agents/
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Lock files (using requirements.txt instead)
+uv.lock
+pyproject.toml
+.python-version
